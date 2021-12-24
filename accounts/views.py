@@ -1,0 +1,102 @@
+from django.shortcuts import render, redirect
+from django.contrib import messages, auth
+from django.core.validators import validate_email
+from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
+from accounts.models import FormContatos
+
+
+# Create your views here.
+
+def login(request):
+    #se nada for postado exibe o login
+    if request.method != 'POST':
+        return render(request, 'accounts/login.html')
+
+    usuario = request.POST.get('usuario')
+    password = request.POST.get('password')
+
+    user = auth.authenticate(request, username=usuario, password=password)
+
+    if not user:
+        messages.error(request, 'Usuario ou senha inválidos')
+        return render(request, 'accounts/login.html')
+    else:
+        auth.login(request, user)
+        messages.success(request,'Você fez login com Sucesso')
+        return redirect('dashboard')
+
+
+
+def logout(request):
+    #faz logout e redireciona
+    auth.logout(request)
+    return redirect('login')
+
+
+def cadastro(request):
+    if request.method != 'POST':
+        return render(request, 'accounts/cadastro.html')
+
+    nome = request.POST.get('nome')
+    sobrenome = request.POST.get('sobrenome')
+    email = request.POST.get('email')
+    usuario = request.POST.get('usuario')
+    password = request.POST.get('password')
+    repeat_password = request.POST.get('password2')
+
+    if not nome or not sobrenome or not email or not usuario\
+            or not password or not repeat_password:
+        messages.error(request,     'Nenhum campo pode estar vazio.')
+        return render(request, 'accounts/cadastro.html')
+
+    try:
+        if email != '':
+            validate_email(email)
+    except:
+        messages.error(request, 'Email inválido.')
+
+    if len(usuario) < 6:
+        messages.error(request, 'Usuario precisa ter 6 caracteres ou mais.')
+        return render(request, 'accounts/cadastro.html')
+
+
+    if len(password) < 6:
+        messages.error(request, 'Senha precisa ter 6 caracteres ou mais.')
+        return render(request, 'accounts/cadastro.html')
+
+    if password != repeat_password:
+        messages.error(request, 'Senhas não coincidem.')
+        return render(request, 'accounts/cadastro.html')
+
+    if User.objects.filter(username=usuario).exists():
+        messages.error(request, 'Usuario ja existe.')
+        return render(request, 'accounts/cadastro.html')
+
+    if User.objects.filter(email=email).exists():
+        messages.error(request, 'Email ja existe.')
+        return render(request, 'accounts/cadastro.html')
+
+    messages.success(request, 'Registrado com sucesso!')
+    user = User.objects.create_user(username=usuario, email=email, password=password, first_name=nome, last_name=sobrenome)
+    user.save()
+    return redirect('login')
+
+
+#se o usuario nao estiver logado ele redireciona pra login
+@login_required(redirect_field_name='login')
+def dashboard(request):
+    if request.method != 'POST':
+        form = FormContatos()
+        return render(request, 'accounts/dashboard.html', {'form':form})
+
+    form = FormContatos(request.POST, request.FILES)
+    if not form.is_valid():
+        messages.error(request, 'Erro ao enviar o formulario')
+        form = FormContatos(request.POST)
+        return render(request, 'accounts/dashboard.html', {'form': form})
+
+    form.save()
+    messages.success(request,f'Contato {request.POST.get("nome")} {request.POST.get("sobrenome")} salvo com sucesso')
+    return redirect('dashboard')
+
